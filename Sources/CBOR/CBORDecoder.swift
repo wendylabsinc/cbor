@@ -1,6 +1,26 @@
 import Foundation
 
-/// A minimal CBOR decoder that can decode common Swift `Codable` types.
+/// A CBOR decoder that decodes CBOR data to Swift types according to [RFC 8949](https://datatracker.ietf.org/doc/html/rfc8949).
+///
+/// Use `CBORDecoder` to decode CBOR data into instances of data types that conform to ``Decodable``.
+/// The decoder supports all standard Swift types and can be extended to support custom types by implementing
+/// the `Decodable` protocol.
+///
+/// ## Example
+/// ```swift
+/// struct User: Codable {
+///     let name: String
+///     let age: Int
+/// }
+///
+/// let decoder = CBORDecoder()
+/// do {
+///     let decoded = try decoder.decode(User.self, from: cborData)
+///     print("User: \(decoded.name), Age: \(decoded.age)")
+/// } catch {
+///     print("Decoding error: \(error)")
+/// }
+/// ```
 public class CBORDecoder {
     
     public init() {}

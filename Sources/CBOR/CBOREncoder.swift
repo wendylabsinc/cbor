@@ -74,7 +74,29 @@ enum CBORCodingError: Error {
   case encodingError(String)
 }
 
-/// A minimal CBOR encoder that can encode common Swift `Codable` types.
+/// A CBOR encoder that encodes Swift types to CBOR format according to [RFC 8949](https://datatracker.ietf.org/doc/html/rfc8949).
+///
+/// Use `CBOREncoder` to encode instances of data types that conform to ``Encodable`` to CBOR format.
+/// The encoder supports all standard Swift types and can be extended to support custom types by implementing
+/// the `Encodable` protocol.
+///
+/// ## Example
+/// ```swift
+/// struct User: Codable {
+///     let name: String
+///     let age: Int
+/// }
+///
+/// let user = User(name: "Alice", age: 30)
+/// let encoder = CBOREncoder()
+///
+/// do {
+///     let encoded: Data = try encoder.encode(user)
+///     // Use encoded CBOR data...
+/// } catch {
+///     print("Encoding error: \(error)")
+/// }
+/// ```
 public class CBOREncoder {
 
   public init() {}

@@ -113,15 +113,20 @@ This package is designed to work seamlessly across all platforms that support Sw
 No platform-specific code or dependencies are used, ensuring consistent behavior across all supported platforms.
 
 
-# Generating Documentation with Swift DocC
+# Generating Documentation
 
-We use Swift DocC to generate documentation for the package. To generate documentation for the package, run the following command. Learn more about Swift DocC [here](https://developer.apple.com/documentation/docc).
+This package uses Swift DocC for documentation. You can:
 
+1. View the documentation on [GitHub Pages](https://wendylabsinc.github.io/cbor/documentation/cbor)
+
+2. Generate documentation locally:
 ```sh
 swift package generate-documentation
 ```
 
-TODO: Add a script to the package to generate documentation and host it on GitHub Pages.
+3. Preview documentation in Xcode:
+   - Build the documentation with ⌘ + B
+   - Show the documentation navigator with ⌘ + Shift + Ctrl + D
 
 ## Contributing
 
