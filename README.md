@@ -23,7 +23,7 @@ Add the following to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/wendylabsinc/cbor.git", from: "0.0.1")
+    .package(url: "https://github.com/wendylabsinc/cbor.git", from: "0.0.2")
 ]
 ```
 
@@ -111,6 +111,17 @@ This package is designed to work seamlessly across all platforms that support Sw
 - Windows
 
 No platform-specific code or dependencies are used, ensuring consistent behavior across all supported platforms.
+
+
+# Generating Documentation with Swift DocC
+
+We use Swift DocC to generate documentation for the package. To generate documentation for the package, run the following command. Learn more about Swift DocC [here](https://developer.apple.com/documentation/docc).
+
+```sh
+swift package generate-documentation
+```
+
+TODO: Add a script to the package to generate documentation and host it on GitHub Pages.
 
 ## Contributing
 

@@ -9,7 +9,11 @@ let package = Package(
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "CBOR",
-            targets: ["CBOR"]),
+            targets: ["CBOR"])
+    ],
+    dependencies: [
+        // other dependencies
+        .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.1.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
