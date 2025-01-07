@@ -1,5 +1,7 @@
 # CBOR
 
+[![Swift](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml/badge.svg)](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml)
+
 A lightweight, cross-platform Swift implementation of [CBOR (RFC 8949)](https://datatracker.ietf.org/doc/html/rfc8949) encoding and decoding. This package provides a Swift `Codable`-compatible interface for working with CBOR data.
 
 ## Features
