@@ -24,6 +24,14 @@ import Foundation
 public class CBORDecoder {
     
     public init() {}
+
+    private func parseDouble(_ bytes: Data) -> Float64 {
+        var value: UInt64 = 0
+        for i in 0..<8 {
+            value = value << 8 | UInt64(bytes[i])
+        }
+        return Float64(bitPattern: value)
+    }
     
     /// Decodes a `Codable` type from CBOR data.
     public func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
@@ -56,12 +64,11 @@ public class CBORDecoder {
             return .unsignedInt(value)
         case 1: // negative int
             let value = try parseUInt(additionalInfo, &it)
-            // negative ints in cbor are -1 - n
-            return .negativeInt(-1 - Int64(value))
+            return .negativeInt(value)
         case 2: // byte string
             let length = try parseUInt(additionalInfo, &it)
             let bytes = try parseBytes(Int(length), &it)
-            return .byteString(bytes)
+            return .byteString(Array(bytes))
         case 3: // text string
             let length = try parseUInt(additionalInfo, &it)
             let bytes = try parseBytes(Int(length), &it)
@@ -87,16 +94,36 @@ public class CBORDecoder {
             }
             return .map(dict)
         case 6: // tag
-            // Skip tags in this minimal implementation. 
-            // Just parse the next item as a normal item.
-            _ = try parseUInt(additionalInfo, &it) // skip tag
-            return try parseItem(&it)
+            let tag = try parseUInt(additionalInfo, &it)
+            let value = try parseItem(&it)
+            return .tagged(CBOR.Tag(rawValue: tag), value)
         case 7: // simple / float / bool / null
             switch additionalInfo {
-            case 20: return .bool(false)
-            case 21: return .bool(true)
+            case 20: return .boolean(false)
+            case 21: return .boolean(true)
             case 22: return .null
-            // Proper float/double handling omitted for brevity
+            case 23: return .undefined
+            case 24:
+                guard let simple = it.next() else {
+                    throw CBORCodingError.decodingError("Unexpected end of data")
+                }
+                return .simple(simple)
+            case 25: // IEEE 754 Half
+                let bytes = try parseBytes(2, &it)
+                let value = Float32(bitPattern: UInt32(bytes[0]) << 8 | UInt32(bytes[1]))
+                return .half(value)
+            case 26: // IEEE 754 Single
+                let bytes = try parseBytes(4, &it)
+                let value = Float32(bitPattern: UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3]))
+                return .float(value)
+            case 27: // IEEE 754 Double
+                let bytes = try parseBytes(8, &it)
+                var value: UInt64 = 0
+                for i in 0..<8 {
+                    value = (value << 8) | UInt64(bytes[i])
+                }
+                return .double(Float64(bitPattern: value))
+            case 31: return .break
             default:
                 throw CBORCodingError.decodingError("Unsupported simple or float type: \(additionalInfo)")
             }
@@ -130,17 +157,11 @@ public class CBORDecoder {
             }
         case 27:
             let bytes = try parseBytes(8, &it)
-            return bytes.withUnsafeBytes { ptr in
-                let aligned = ptr.baseAddress!.assumingMemoryBound(to: UInt8.self)
-                return UInt64(aligned[0]) << 56 |
-                       UInt64(aligned[1]) << 48 |
-                       UInt64(aligned[2]) << 40 |
-                       UInt64(aligned[3]) << 32 |
-                       UInt64(aligned[4]) << 24 |
-                       UInt64(aligned[5]) << 16 |
-                       UInt64(aligned[6]) << 8  |
-                       UInt64(aligned[7])
+            var value: UInt64 = 0
+            for i in 0..<8 {
+                value = (value << 8) | UInt64(bytes[i])
             }
+            return value
         default:
             throw CBORCodingError.decodingError("Invalid additionalInfo: \(ai)")
         }
@@ -211,7 +232,7 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
     }
     
     func decode(_ type: Bool.Type) throws -> Bool {
-        guard case let .bool(b) = value else {
+        guard case let .boolean(b) = value else {
             throw CBORCodingError.decodingError("Expected bool")
         }
         return b
@@ -231,6 +252,9 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
         switch value {
         case .unsignedInt(let num): return Double(num)
         case .negativeInt(let num): return Double(num)
+        case .double(let num): return num
+        case .float(let num): return Double(num)
+        case .half(let num): return Double(num)
         case .utf8String(let str):
             guard let d = Double(str) else {
                 throw CBORCodingError.decodingError("Invalid double format in string")
@@ -242,7 +266,11 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
     }
     
     func decode(_ type: Float.Type) throws -> Float {
-        return Float(try decode(Double.self))
+        switch value {
+        case .float(let num): return num
+        case .half(let num): return num
+        default: return Float(try decode(Double.self))
+        }
     }
     
     func decode(_ type: Int.Type) throws -> Int {
@@ -253,10 +281,11 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
             }
             return Int(num)
         case .negativeInt(let num):
-            if num < Int64(Int.min) {
+            let negativeValue = ~num &+ 1
+            if negativeValue > UInt64(Int.max) {
                 throw CBORCodingError.decodingError("Value out of range")
             }
-            return Int(num)
+            return -Int(negativeValue)
         default:
             throw CBORCodingError.decodingError("Expected integer")
         }
@@ -294,7 +323,10 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
             }
             return Int64(num)
         case .negativeInt(let num):
-            return num
+            if num > UInt64(Int64.max) + 1 {
+                throw CBORCodingError.decodingError("Value out of range for Int64")
+            }
+            return -Int64(num) - 1
         default:
             throw CBORCodingError.decodingError("Expected integer")
         }

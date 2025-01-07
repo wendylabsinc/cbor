@@ -1,77 +1,10 @@
 import Foundation
 
-/// Minimal CBOR major types for illustration purposes.
-enum CBOR: Hashable {
-  case unsignedInt(UInt64)
-  case negativeInt(Int64)
-  case utf8String(String)
-  case byteString(Data)
-  case array([CBOR])
-  case map([CBOR: CBOR])
-  case null
-  case bool(Bool)
-
-  /// Simplified comparison to allow map keys usage.
-  /// For a real CBOR library, a more sophisticated approach is required.
-  /// This is a naive approach so we can store CBOR keys in a Swift dictionary.
-  static func == (lhs: CBOR, rhs: CBOR) -> Bool {
-    switch (lhs, rhs) {
-    case let (.unsignedInt(a), .unsignedInt(b)): return a == b
-    case let (.negativeInt(a), .negativeInt(b)): return a == b
-    case let (.utf8String(a), .utf8String(b)): return a == b
-    case let (.byteString(a), .byteString(b)): return a == b
-    case let (.bool(a), .bool(b)): return a == b
-    case (.null, .null): return true
-    default: return false
-    }
-  }
-
-  static func < (lhs: CBOR, rhs: CBOR) -> Bool {
-    // This is simplistic; real CBOR might sort differently, or not at all.
-    // Only used in this sample for dictionary key sorting (if needed).
-    switch (lhs, rhs) {
-    case let (.unsignedInt(a), .unsignedInt(b)): return a < b
-    case let (.negativeInt(a), .negativeInt(b)): return a < b
-    case let (.utf8String(a), .utf8String(b)): return a < b
-    default: return false
-    }
-  }
-
-  func hash(into hasher: inout Hasher) {
-    switch self {
-    case .unsignedInt(let value): 
-      hasher.combine(0)  // Type discriminator
-      hasher.combine(value)
-    case .negativeInt(let value):
-      hasher.combine(1)
-      hasher.combine(value)
-    case .utf8String(let value):
-      hasher.combine(2)
-      hasher.combine(value)
-    case .byteString(let value):
-      hasher.combine(3)
-      hasher.combine(value)
-    case .array(let value):
-      hasher.combine(4)
-      hasher.combine(value)
-    case .map(let value):
-      hasher.combine(5)
-      // Convert keys to an array before hashing
-      hasher.combine(Array(value.keys))
-    case .null:
-      hasher.combine(6)
-    case .bool(let value):
-      hasher.combine(7)
-      hasher.combine(value)
-    }
-  }
-}
-
 /// An error thrown when something goes wrong in CBOR encoding or decoding.
 enum CBORCodingError: Error {
-  case unsupportedType
-  case decodingError(String)
-  case encodingError(String)
+    case unsupportedType
+    case decodingError(String)
+    case encodingError(String)
 }
 
 /// A CBOR encoder that encodes Swift types to CBOR format according to [RFC 8949](https://datatracker.ietf.org/doc/html/rfc8949).
@@ -123,14 +56,15 @@ public class CBOREncoder {
     case .negativeInt(let val):
       // Major type 1
       // In CBOR, negative numbers are stored as ~value (i.e., -1 -> 0x20, -2 -> 0x21, etc.)
-      let magnitude = UInt64(-(val + 1))
+      let magnitude = val
       return encodeNegativeUInt(magnitude)
     case .utf8String(let str):
       // Major type 3
       let utf8Data = Data(str.utf8)
       return try encodeIndefiniteLength(majorType: 3, length: utf8Data.count) + utf8Data
-    case .byteString(let data):
+    case .byteString(let bytes):
       // Major type 2
+      let data = Data(bytes)
       return try encodeIndefiniteLength(majorType: 2, length: data.count) + data
     case .array(let arr):
       // Major type 4
@@ -149,9 +83,43 @@ public class CBOREncoder {
     case .null:
       // Simple value for null is 0xf6
       return Data([0xf6])
-    case .bool(let boolVal):
+    case .boolean(let boolVal):
       // Simple value for true is 0xf5, for false is 0xf4
       return boolVal ? Data([0xf5]) : Data([0xf4])
+    case .float(let val):
+      // Major type 7, additional info 26 (IEEE 754 Single)
+      let bits = val.bitPattern
+      return Data([0xfa]) + withUnsafeBytes(of: bits.bigEndian) { Data($0) }
+    case .double(let val):
+      // Major type 7, additional info 27 (IEEE 754 Double)
+      let bits = val.bitPattern
+      return Data([0xfb]) + withUnsafeBytes(of: bits.bigEndian) { Data($0) }
+    case .half(let val):
+      // Major type 7, additional info 25 (IEEE 754 Half)
+      let bits = Float(val).bitPattern
+      let halfBits = UInt16(bits & 0xFFFF)
+      return Data([0xf9]) + withUnsafeBytes(of: halfBits.bigEndian) { Data($0) }
+    case .tagged(let tag, let item):
+      // Major type 6
+      let tagData = encodePositiveUInt(tag.rawValue)
+      let itemData = try encodeCBOR(item)
+      return tagData + itemData
+    case .simple(let val):
+      // Major type 7
+      return Data([0xe0 + val])
+    case .undefined:
+      // Simple value for undefined is 0xf7
+      return Data([0xf7])
+    case .break:
+      // Break code is 0xff
+      return Data([0xff])
+    #if canImport(Foundation)
+    case .date(let date):
+      // Encode dates as tagged strings (tag 0) or epoch-based (tag 1)
+      let timestamp = date.timeIntervalSince1970
+      let taggedValue = CBOR.tagged(.epochBasedDateTime, .double(timestamp))
+      return try encodeCBOR(taggedValue)
+    #endif
     }
   }
 
@@ -320,7 +288,7 @@ private struct CBORSingleValueEncodingContainer: SingleValueEncodingContainer {
   }
 
   mutating func encode(_ value: Bool) throws {
-    encoder.setSingleValue(.bool(value))
+    encoder.setSingleValue(.boolean(value))
   }
 
   mutating func encode(_ value: String) throws {
@@ -337,7 +305,7 @@ private struct CBORSingleValueEncodingContainer: SingleValueEncodingContainer {
       if intValue >= 0 {
         encoder.setSingleValue(.unsignedInt(UInt64(intValue)))
       } else {
-        encoder.setSingleValue(.negativeInt(intValue))
+        encoder.setSingleValue(.negativeInt(UInt64(-intValue - 1)))
       }
     } else {
       // Fallback: store as string (naive)
@@ -353,27 +321,18 @@ private struct CBORSingleValueEncodingContainer: SingleValueEncodingContainer {
     if value >= 0 {
       encoder.setSingleValue(.unsignedInt(UInt64(value)))
     } else {
-      encoder.setSingleValue(.negativeInt(Int64(value)))
+      encoder.setSingleValue(.negativeInt(UInt64(-value - 1)))
     }
   }
 
-  mutating func encode(_ value: Int8) throws {
-    try encode(Int(value))
-  }
-
-  mutating func encode(_ value: Int16) throws {
-    try encode(Int(value))
-  }
-
-  mutating func encode(_ value: Int32) throws {
-    try encode(Int(value))
-  }
-
+  mutating func encode(_ value: Int8) throws { try encode(Int(value)) }
+  mutating func encode(_ value: Int16) throws { try encode(Int(value)) }
+  mutating func encode(_ value: Int32) throws { try encode(Int(value)) }
   mutating func encode(_ value: Int64) throws {
     if value >= 0 {
       encoder.setSingleValue(.unsignedInt(UInt64(value)))
     } else {
-      encoder.setSingleValue(.negativeInt(value))
+      encoder.setSingleValue(.negativeInt(UInt64(-value - 1)))
     }
   }
 
@@ -429,7 +388,7 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
   }
 
   mutating func encode(_ value: Bool) throws {
-    elements.append(.bool(value))
+    elements.append(.boolean(value))
     count += 1
     encoder.setContainerValue(.array(elements))
   }
@@ -447,7 +406,7 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
       if intValue >= 0 {
         elements.append(.unsignedInt(UInt64(intValue)))
       } else {
-        elements.append(.negativeInt(intValue))
+        elements.append(.negativeInt(UInt64(-intValue - 1)))
       }
     } else {
       // Fallback: store as string
@@ -465,7 +424,7 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
     if value >= 0 {
       elements.append(.unsignedInt(UInt64(value)))
     } else {
-      elements.append(.negativeInt(Int64(value)))
+      elements.append(.negativeInt(UInt64(-value - 1)))
     }
     count += 1
     encoder.setContainerValue(.array(elements))
@@ -478,7 +437,7 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
     if value >= 0 {
       elements.append(.unsignedInt(UInt64(value)))
     } else {
-      elements.append(.negativeInt(value))
+      elements.append(.negativeInt(UInt64(-value - 1)))
     }
     count += 1
     encoder.setContainerValue(.array(elements))
@@ -588,7 +547,7 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
   }
 
   mutating func encode(_ value: Bool, forKey key: K) throws {
-    dictionary[.utf8String(key.stringValue)] = .bool(value)
+    dictionary[.utf8String(key.stringValue)] = .boolean(value)
     finalizeContainer()
   }
 
@@ -604,7 +563,7 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
       if intValue >= 0 {
         dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(intValue))
       } else {
-        dictionary[.utf8String(key.stringValue)] = .negativeInt(intValue)
+        dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(-intValue - 1))
       }
     } else {
       // Fallback: store as string
@@ -621,7 +580,7 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
     if value >= 0 {
       dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
     } else {
-      dictionary[.utf8String(key.stringValue)] = .negativeInt(Int64(value))
+      dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(-value - 1))
     }
     finalizeContainer()
   }
@@ -642,7 +601,7 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
     if value >= 0 {
       dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
     } else {
-      dictionary[.utf8String(key.stringValue)] = .negativeInt(value)
+      dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(-value - 1))
     }
     finalizeContainer()
   }
