@@ -38,7 +38,7 @@ jobs:
             generate-documentation --target CBOR \
             --disable-indexing \
             --transform-for-static-hosting \
-            --hosting-base-path CBOR \
+            --hosting-base-path cbor \
             --output-path ./docs
 
       - name: Upload artifact

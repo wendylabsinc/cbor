@@ -173,7 +173,7 @@ No platform-specific code or dependencies are used, ensuring consistent behavior
 
 This package uses Swift DocC for documentation. You can:
 
-1. View the documentation on [GitHub Pages](https://wendylabsinc.github.io/cbor/documentation/cbor)
+1. View the documentation on [GitHub Pages](https://wendylabsinc.github.io/CBOR/documentation/cbor)
 
 2. Generate documentation locally:
 ```sh
