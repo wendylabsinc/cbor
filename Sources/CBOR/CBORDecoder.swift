@@ -79,18 +79,22 @@ public class CBORDecoder {
         case 4: // array
             let length = try parseUInt(additionalInfo, &it)
             var arr: [CBOR] = []
-            for _ in 0..<length {
-                let element = try parseItem(&it)
-                arr.append(element)
+            if length > 0 {
+                for _ in 0..<length {
+                    let element = try parseItem(&it)
+                    arr.append(element)
+                }
             }
             return .array(arr)
         case 5: // map
             let length = try parseUInt(additionalInfo, &it)
             var dict: [CBOR : CBOR] = [:]
-            for _ in 0..<length {
-                let key = try parseItem(&it)
-                let value = try parseItem(&it)
-                dict[key] = value
+            if length > 0 {
+                for _ in 0..<length {
+                    let key = try parseItem(&it)
+                    let value = try parseItem(&it)
+                    dict[key] = value
+                }
             }
             return .map(dict)
         case 6: // tag
@@ -281,11 +285,25 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
             }
             return Int(num)
         case .negativeInt(let num):
-            let negativeValue = ~num &+ 1
-            if negativeValue > UInt64(Int.max) {
+            if num == UInt64(Int.max) + 1 {
+                return Int.min
+            }
+            if num > UInt64(Int.max) + 1 {
                 throw CBORCodingError.decodingError("Value out of range")
             }
-            return -Int(negativeValue)
+            return -Int(num) - 1
+        case .double(let num):
+            let intValue = Int(num)
+            if Double(intValue) != num {
+                throw CBORCodingError.decodingError("Value is not an integer")
+            }
+            return intValue
+        case .float(let num):
+            let intValue = Int(num)
+            if Float(intValue) != num {
+                throw CBORCodingError.decodingError("Value is not an integer")
+            }
+            return intValue
         default:
             throw CBORCodingError.decodingError("Expected integer")
         }
@@ -323,10 +341,25 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
             }
             return Int64(num)
         case .negativeInt(let num):
+            if num == UInt64(Int64.max) + 1 {
+                return Int64.min
+            }
             if num > UInt64(Int64.max) + 1 {
                 throw CBORCodingError.decodingError("Value out of range for Int64")
             }
             return -Int64(num) - 1
+        case .double(let num):
+            let int64Value = Int64(num)
+            if Double(int64Value) != num {
+                throw CBORCodingError.decodingError("Value is not an integer")
+            }
+            return int64Value
+        case .float(let num):
+            let int64Value = Int64(num)
+            if Float(int64Value) != num {
+                throw CBORCodingError.decodingError("Value is not an integer")
+            }
+            return int64Value
         default:
             throw CBORCodingError.decodingError("Expected integer")
         }
@@ -335,6 +368,19 @@ fileprivate struct CBORSingleValueDecodingContainer: SingleValueDecodingContaine
     func decode(_ type: UInt.Type) throws -> UInt {
         switch value {
         case .unsignedInt(let num):
+            if num > UInt64(UInt.max) {
+                throw CBORCodingError.decodingError("Value out of range for UInt")
+            }
+            return UInt(num)
+        case .double(let num):
+            if num < 0 || Double(UInt64(num)) != num {
+                throw CBORCodingError.decodingError("Value is not a positive integer")
+            }
+            return UInt(num)
+        case .float(let num):
+            if num < 0 || Float(UInt64(num)) != num {
+                throw CBORCodingError.decodingError("Value is not a positive integer")
+            }
             return UInt(num)
         default:
             throw CBORCodingError.decodingError("Expected unsigned integer")

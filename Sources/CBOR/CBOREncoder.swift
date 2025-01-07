@@ -69,17 +69,17 @@ public class CBOREncoder {
     case .array(let arr):
       // Major type 4
       let encodedItems = try arr.map { try encodeCBOR($0) }.reduce(Data()) { $0 + $1 }
-      return try encodeIndefiniteLength(majorType: 4, length: arr.count) + encodedItems
+      let header = try encodeIndefiniteLength(majorType: 4, length: arr.count)
+      return header + encodedItems
     case .map(let dict):
       // Major type 5
-      // For simplicity, we assume the dict is already in a valid key order.
-      // In real CBOR, keys need not be strings; they can be any CBOR type.
       let encodedPairs = try dict.map { (key, value) -> Data in
         let encodedKey = try encodeCBOR(key)
         let encodedValue = try encodeCBOR(value)
         return encodedKey + encodedValue
       }.reduce(Data()) { $0 + $1 }
-      return try encodeIndefiniteLength(majorType: 5, length: dict.count) + encodedPairs
+      let header = try encodeIndefiniteLength(majorType: 5, length: dict.count)
+      return header + encodedPairs
     case .null:
       // Simple value for null is 0xf6
       return Data([0xf6])
@@ -157,14 +157,13 @@ public class CBOREncoder {
 
   /// Encodes a negative integer (major type 1).
   private func encodeNegativeUInt(_ value: UInt64) -> Data {
-    // Negative n is stored as (n = -1 - u)
-    // e.g. -1 -> 0x20, -2 -> 0x21, etc.
-    // We already have the magnitude as the positive offset from -1.
+    // In CBOR, negative integers are encoded as -(n+1)
+    // So -1 is encoded as 0, -2 as 1, etc.
     switch value {
     case 0...23:
       return Data([0x20 + UInt8(value)])
     case 24...0xFF:
-      return Data([0x38, UInt8(value & 0xFF)])
+      return Data([0x38, UInt8(value)])
     case 0x100...0xFFFF:
       return Data([0x39, UInt8((value >> 8) & 0xFF), UInt8(value & 0xFF)])
     case 0x10000...0xFFFF_FFFF:
@@ -173,7 +172,7 @@ public class CBOREncoder {
         UInt8((value >> 24) & 0xFF),
         UInt8((value >> 16) & 0xFF),
         UInt8((value >> 8) & 0xFF),
-        UInt8(value & 0xFF),
+        UInt8(value & 0xFF)
       ])
     default:
       return Data([
@@ -185,7 +184,7 @@ public class CBOREncoder {
         UInt8((value >> 24) & 0xFF),
         UInt8((value >> 16) & 0xFF),
         UInt8((value >> 8) & 0xFF),
-        UInt8(value & 0xFF),
+        UInt8(value & 0xFF)
       ])
     }
   }
@@ -296,43 +295,44 @@ private struct CBORSingleValueEncodingContainer: SingleValueEncodingContainer {
   }
 
   mutating func encode(_ value: Double) throws {
-    // For simplicity, encode Double as a string or as 64-bit integer approximation is not correct.
-    // In real CBOR, you’d encode this as major type 7 + float/double.
-    // We'll do a naive approach by converting Double -> Int64 if possible, otherwise fallback to string.
-    let intValue = Int64(value)
-    if Double(intValue) == value {
-      // Lossless integer
-      if intValue >= 0 {
-        encoder.setSingleValue(.unsignedInt(UInt64(intValue)))
-      } else {
-        encoder.setSingleValue(.negativeInt(UInt64(-intValue - 1)))
-      }
-    } else {
-      // Fallback: store as string (naive)
-      encoder.setSingleValue(.utf8String(String(value)))
-    }
+    encoder.setSingleValue(.double(value))
   }
 
   mutating func encode(_ value: Float) throws {
-    try encode(Double(value))
+    encoder.setSingleValue(.float(value))
   }
 
   mutating func encode(_ value: Int) throws {
-    if value >= 0 {
-      encoder.setSingleValue(.unsignedInt(UInt64(value)))
-    } else {
+    if value == Int.min {
+      // Special case for minimum value to avoid overflow
+      encoder.setSingleValue(.negativeInt(UInt64(Int.max) + 1))
+    } else if value < 0 {
       encoder.setSingleValue(.negativeInt(UInt64(-value - 1)))
+    } else {
+      encoder.setSingleValue(.unsignedInt(UInt64(value)))
     }
   }
 
-  mutating func encode(_ value: Int8) throws { try encode(Int(value)) }
-  mutating func encode(_ value: Int16) throws { try encode(Int(value)) }
-  mutating func encode(_ value: Int32) throws { try encode(Int(value)) }
+  mutating func encode(_ value: Int8) throws {
+    try encode(Int(value))
+  }
+
+  mutating func encode(_ value: Int16) throws {
+    try encode(Int(value))
+  }
+
+  mutating func encode(_ value: Int32) throws {
+    try encode(Int(value))
+  }
+
   mutating func encode(_ value: Int64) throws {
-    if value >= 0 {
-      encoder.setSingleValue(.unsignedInt(UInt64(value)))
-    } else {
+    if value == Int64.min {
+      // Special case for minimum value to avoid overflow
+      encoder.setSingleValue(.negativeInt(UInt64(Int64.max) + 1))
+    } else if value < 0 {
       encoder.setSingleValue(.negativeInt(UInt64(-value - 1)))
+    } else {
+      encoder.setSingleValue(.unsignedInt(UInt64(value)))
     }
   }
 
@@ -421,10 +421,12 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
   }
 
   mutating func encode(_ value: Int) throws {
-    if value >= 0 {
-      elements.append(.unsignedInt(UInt64(value)))
-    } else {
+    if value == Int.min {
+      elements.append(.negativeInt(UInt64(Int.max) + 1))
+    } else if value < 0 {
       elements.append(.negativeInt(UInt64(-value - 1)))
+    } else {
+      elements.append(.unsignedInt(UInt64(value)))
     }
     count += 1
     encoder.setContainerValue(.array(elements))
@@ -434,10 +436,12 @@ private struct CBORUnkeyedEncodingContainer: UnkeyedEncodingContainer {
   mutating func encode(_ value: Int16) throws { try encode(Int(value)) }
   mutating func encode(_ value: Int32) throws { try encode(Int(value)) }
   mutating func encode(_ value: Int64) throws {
-    if value >= 0 {
-      elements.append(.unsignedInt(UInt64(value)))
-    } else {
+    if value == Int64.min {
+      elements.append(.negativeInt(UInt64(Int64.max) + 1))
+    } else if value < 0 {
       elements.append(.negativeInt(UInt64(-value - 1)))
+    } else {
+      elements.append(.unsignedInt(UInt64(value)))
     }
     count += 1
     encoder.setContainerValue(.array(elements))
@@ -577,10 +581,12 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
   }
 
   mutating func encode(_ value: Int, forKey key: K) throws {
-    if value >= 0 {
-      dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
-    } else {
+    if value == Int.min {
+      dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(Int.max) + 1)
+    } else if value < 0 {
       dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(-value - 1))
+    } else {
+      dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
     }
     finalizeContainer()
   }
@@ -598,10 +604,12 @@ private struct CBORKeyedEncodingContainer<K: CodingKey>: KeyedEncodingContainerP
   }
 
   mutating func encode(_ value: Int64, forKey key: K) throws {
-    if value >= 0 {
-      dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
-    } else {
+    if value == Int64.min {
+      dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(Int64.max) + 1)
+    } else if value < 0 {
       dictionary[.utf8String(key.stringValue)] = .negativeInt(UInt64(-value - 1))
+    } else {
+      dictionary[.utf8String(key.stringValue)] = .unsignedInt(UInt64(value))
     }
     finalizeContainer()
   }

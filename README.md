@@ -38,9 +38,9 @@ targets: [
 ]
 ```
 
-## Quick Start
+## Usage Guide
 
-### Basic Usage
+### Basic Usage with Codable
 
 ```swift
 import CBOR
@@ -73,31 +73,88 @@ do {
 }
 ```
 
+### Working with CBOR Values Directly
+
+```swift
+// Create CBOR values
+let integer = CBOR.unsignedInt(42)
+let text = CBOR.utf8String("Hello")
+let array = CBOR.array([.unsignedInt(1), .utf8String("two")])
+
+// Create a CBOR map
+let map: CBOR = [
+    "key1": .unsignedInt(1),
+    "key2": .utf8String("value")
+]
+
+// Access values using pattern matching
+if case let .utf8String(str) = text {
+    print(str) // Prints: "Hello"
+}
+
+// Use subscript for arrays and maps
+let firstElement = array[.unsignedInt(0)] // Returns .unsignedInt(1)
+let value = map[.utf8String("key1")] // Returns .unsignedInt(1)
+```
+
 ### Working with Collections
 
 ```swift
 // Arrays
 let numbers = [1, 2, 3, 4, 5]
 let encodedArray = try encoder.encode(numbers)
+let decodedArray = try decoder.decode([Int].self, from: encodedArray)
 
 // Dictionaries
 let dict = ["key": "value", "number": "42"]
 let encodedDict = try encoder.encode(dict)
+let decodedDict = try decoder.decode([String: String].self, from: encodedDict)
 
 // Nested Structures
 struct ComplexType: Codable {
     let items: [String]
     let metadata: [String: Int]
+    let tags: Set<String>
 }
 
 let complex = ComplexType(
     items: ["a", "b", "c"],
-    metadata: ["count": 3, "version": 1]
+    metadata: ["count": 3, "version": 1],
+    tags: ["tag1", "tag2"]
 )
 let encodedComplex = try encoder.encode(complex)
 ```
 
-For more examples, see the [Tests](Tests/CBORTests/CBOREncoderTests.swift) directory.
+### Working with Tagged Values
+
+```swift
+// Create a tagged date/time string
+let dateString = "2023-01-01T00:00:00Z"
+let taggedDate = CBOR.tagged(.standardDateTimeString, .utf8String(dateString))
+
+// Create a tagged bignum
+let bignumBytes: [UInt8] = [0xFF, 0xFF, 0xFF, 0xFF]
+let taggedBignum = CBOR.tagged(.positiveBignum, .byteString(bignumBytes))
+
+// Encode tagged values
+let encoder = CBOREncoder()
+let encoded = try encoder.encode(taggedDate)
+```
+
+### Error Handling
+
+```swift
+do {
+    let encoded = try encoder.encode(value)
+    let decoded = try decoder.decode(Type.self, from: encoded)
+} catch CBORCodingError.decodingError(let message) {
+    print("Decoding error: \(message)")
+} catch CBORCodingError.encodingError(let message) {
+    print("Encoding error: \(message)")
+} catch {
+    print("Unexpected error: \(error)")
+}
+```
 
 ## Cross-Platform Support
 
@@ -111,7 +168,6 @@ This package is designed to work seamlessly across all platforms that support Sw
 - Windows
 
 No platform-specific code or dependencies are used, ensuring consistent behavior across all supported platforms.
-
 
 # Generating Documentation
 

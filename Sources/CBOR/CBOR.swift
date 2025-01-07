@@ -2,27 +2,140 @@
 import Foundation
 #endif
 
+/// A representation of CBOR (Concise Binary Object Representation) data types according to RFC 8949.
+///
+/// The `CBOR` enum represents all possible CBOR data types and provides a type-safe way to work with CBOR data in Swift.
+/// It supports all major CBOR types including integers, strings, arrays, maps, tags, and special values.
+///
+/// ## Usage
+/// ```swift
+/// // Create CBOR values
+/// let integer = CBOR.unsignedInt(42)
+/// let text = CBOR.utf8String("Hello")
+/// let array = CBOR.array([.unsignedInt(1), .utf8String("two")])
+/// let map: CBOR = [
+///     "key1": .unsignedInt(1),
+///     "key2": .utf8String("value")
+/// ]
+///
+/// // Access values
+/// if case let .utf8String(str) = text {
+///     print(str) // Prints: "Hello"
+/// }
+///
+/// // Use subscript for arrays and maps
+/// let firstElement = array[.unsignedInt(0)] // Returns .unsignedInt(1)
+/// let value = map[.utf8String("key1")] // Returns .unsignedInt(1)
+/// ```
+///
+/// ## Topics
+///
+/// ### Integer Values
+/// - ``unsignedInt(_:)``
+/// - ``negativeInt(_:)``
+///
+/// ### String Values
+/// - ``utf8String(_:)``
+/// - ``byteString(_:)``
+///
+/// ### Container Values
+/// - ``array(_:)``
+/// - ``map(_:)``
+///
+/// ### Special Values
+/// - ``tagged(_:_:)``
+/// - ``simple(_:)``
+/// - ``boolean(_:)``
+/// - ``null``
+/// - ``undefined``
+/// - ``break``
+///
+/// ### Floating Point Values
+/// - ``half(_:)``
+/// - ``float(_:)``
+/// - ``double(_:)``
+///
+/// ### Date Values
+/// - ``date(_:)``
+///
+/// ### Collections
+/// - ``array(_:)``
+/// - ``map(_:)``
+///
+/// ### Special Values
+/// - ``tagged(_:_:)``
+/// - ``simple(_:)``
+/// - ``boolean(_:)``
+/// - ``null``
+/// - ``undefined``
 public indirect enum CBOR : Equatable, Hashable,
         ExpressibleByNilLiteral, ExpressibleByIntegerLiteral, ExpressibleByStringLiteral,
         ExpressibleByArrayLiteral, ExpressibleByDictionaryLiteral, ExpressibleByBooleanLiteral,
         ExpressibleByFloatLiteral {
 
+    /// An unsigned integer value.
+    /// - Parameter value: The unsigned 64-bit integer value.
     case unsignedInt(UInt64)
+
+    /// A negative integer value.
+    /// - Parameter value: The absolute value of the negative integer as a UInt64.
+    /// The actual value is calculated as -(1 + value).
     case negativeInt(UInt64)
+
+    /// A byte string value.
+    /// - Parameter bytes: An array of bytes representing the byte string.
     case byteString([UInt8])
+
+    /// A UTF-8 string value.
+    /// - Parameter string: The string value.
     case utf8String(String)
+
+    /// An array of CBOR values.
+    /// - Parameter elements: The array of CBOR values.
     case array([CBOR])
+
+    /// A map of CBOR key-value pairs.
+    /// - Parameter pairs: The dictionary of CBOR key-value pairs.
     case map([CBOR : CBOR])
+
+    /// A tagged value with an associated tag.
+    /// - Parameters:
+    ///   - tag: The tag value.
+    ///   - item: The tagged CBOR value.
     case tagged(Tag, CBOR)
+
+    /// A simple value.
+    /// - Parameter value: The simple value as an 8-bit unsigned integer.
     case simple(UInt8)
+
+    /// A boolean value.
+    /// - Parameter value: The boolean value.
     case boolean(Bool)
+
+    /// A null value.
     case null
+
+    /// An undefined value.
     case undefined
+
+    /// A half-precision floating point value.
+    /// - Parameter value: The 16-bit floating point value as a Float32.
     case half(Float32)
+
+    /// A single-precision floating point value.
+    /// - Parameter value: The 32-bit floating point value.
     case float(Float32)
+
+    /// A double-precision floating point value.
+    /// - Parameter value: The 64-bit floating point value.
     case double(Float64)
+
+    /// A break stop code for indefinite length items.
     case `break`
+
     #if canImport(Foundation)
+    /// A date value.
+    /// - Parameter value: The Foundation Date value.
     case date(Date)
     #endif
 
@@ -132,6 +245,26 @@ public indirect enum CBOR : Equatable, Hashable,
         }
     }
 
+    /// A CBOR tag that can be attached to values to provide additional semantic meaning.
+    ///
+    /// CBOR tags are used to give additional semantic meaning to values. For example,
+    /// a tag can indicate that a string should be interpreted as a date/time, or that
+    /// a byte string should be interpreted as a positive bignum.
+    ///
+    /// ## Standard Tags
+    /// - ``standardDateTimeString``: Tag 0 for date/time strings
+    /// - ``epochBasedDateTime``: Tag 1 for epoch-based date/time values
+    /// - ``positiveBignum``: Tag 2 for positive big numbers
+    /// - ``negativeBignum``: Tag 3 for negative big numbers
+    /// - ``decimalFraction``: Tag 4 for decimal fractions
+    /// - ``bigfloat``: Tag 5 for big floating point numbers
+    ///
+    /// ## Example
+    /// ```swift
+    /// // Create a tagged date/time string
+    /// let dateString = "2023-01-01T00:00:00Z"
+    /// let taggedDate = CBOR.tagged(.standardDateTimeString, .utf8String(dateString))
+    /// ```
     public struct Tag: RawRepresentable, Hashable, Sendable {
         public let rawValue: UInt64
 
