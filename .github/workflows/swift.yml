@@ -12,19 +12,22 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        swift: ["6.0.0"]
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v3
     
     - name: Setup Swift
-      uses: swift-actions/setup-swift@v1
+      uses: SwiftyLab/setup-swift@latest
       with:
-        swift-version: ${{ matrix.swift }}
+        swift-version: "6.0.0"
         
-    - name: Get Swift version
+    - name: Get swift version
       run: swift --version
+      
+    - name: Get swift version in macOS
+      if: runner.os == 'macOS'
+      run: xcrun --toolchain ${{ env.TOOLCHAINS }} swift --version
         
     - name: Build
       run: swift build -v
