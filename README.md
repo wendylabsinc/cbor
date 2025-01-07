@@ -1,6 +1,8 @@
 # CBOR
 
 [![Swift](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml/badge.svg)](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml)
+[![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20iOS%20%7C%20Linux%20%7C%20Windows-blue.svg)](https://swift.org)
 
 A lightweight, cross-platform Swift implementation of [CBOR (RFC 8949)](https://datatracker.ietf.org/doc/html/rfc8949) encoding and decoding. This package provides a Swift `Codable`-compatible interface for working with CBOR data.
 
@@ -94,6 +96,8 @@ let complex = ComplexType(
 )
 let encodedComplex = try encoder.encode(complex)
 ```
+
+For more examples, see the [Tests](Tests/CBORTests/CBOREncoderTests.swift) directory.
 
 ## Cross-Platform Support
 

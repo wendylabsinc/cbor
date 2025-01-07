@@ -95,13 +95,32 @@ public class CBORDecoder {
             return UInt64(b)
         case 25:
             let bytes = try parseBytes(2, &it)
-            return UInt64(bytes.withUnsafeBytes { $0.load(as: UInt16.self) }.bigEndian)
+            return bytes.withUnsafeBytes { ptr in
+                let aligned = ptr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                return UInt64((UInt16(aligned[0]) << 8) | UInt16(aligned[1]))
+            }
         case 26:
             let bytes = try parseBytes(4, &it)
-            return UInt64(bytes.withUnsafeBytes { $0.load(as: UInt32.self) }.bigEndian)
+            return bytes.withUnsafeBytes { ptr in
+                let aligned = ptr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                return UInt64(UInt32(aligned[0]) << 24 |
+                            UInt32(aligned[1]) << 16 |
+                            UInt32(aligned[2]) << 8  |
+                            UInt32(aligned[3]))
+            }
         case 27:
             let bytes = try parseBytes(8, &it)
-            return bytes.withUnsafeBytes { $0.load(as: UInt64.self) }.bigEndian
+            return bytes.withUnsafeBytes { ptr in
+                let aligned = ptr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+                return UInt64(aligned[0]) << 56 |
+                       UInt64(aligned[1]) << 48 |
+                       UInt64(aligned[2]) << 40 |
+                       UInt64(aligned[3]) << 32 |
+                       UInt64(aligned[4]) << 24 |
+                       UInt64(aligned[5]) << 16 |
+                       UInt64(aligned[6]) << 8  |
+                       UInt64(aligned[7])
+            }
         default:
             throw CBORCodingError.decodingError("Invalid additionalInfo: \(ai)")
         }
