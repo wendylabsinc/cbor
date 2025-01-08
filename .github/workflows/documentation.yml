@@ -39,6 +39,7 @@ jobs:
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path CBOR \
+            --hosting-base-url /CBOR \
             --output-path ./docs
 
       - name: Upload artifact
