@@ -34,12 +34,13 @@ jobs:
         
       - name: Build DocC
         run: |
+          mkdir -p ./docs
           swift package --allow-writing-to-directory ./docs \
             generate-documentation --target CBOR \
             --disable-indexing \
             --transform-for-static-hosting \
             --hosting-base-path CBOR \
-            --hosting-base-url /CBOR \
+            --hosting-base-url https://wendylabsinc.github.io/CBOR \
             --output-path ./docs
 
       - name: Upload artifact
