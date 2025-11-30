@@ -81,7 +81,7 @@ import PackageDescription
 let package = Package(
     name: "YourProject",
     dependencies: [
-        .package(url: "https://github.com/wendylabsinc/cbor", from: "0.0.4")
+        .package(url: "https://github.com/wendylabsinc/cbor", from: "0.7.0")
     ],
     targets: [
         .target(
