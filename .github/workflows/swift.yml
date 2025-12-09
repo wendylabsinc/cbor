@@ -14,10 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Windows excluded due to Swift 6.x ucrt cyclic module dependency bug
-        # https://github.com/swiftlang/swift/issues/79745
-        os: [ubuntu-latest, macos-latest]
-        swift: ["6.0.3"]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        swift: ["6.1"]
     steps:
     - uses: actions/checkout@v4
     - name: Setup Swift
