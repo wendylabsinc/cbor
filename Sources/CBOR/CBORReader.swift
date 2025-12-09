@@ -71,3 +71,22 @@ struct CBORReader {
         index = position
     }
 }
+
+/// Minimal interface for CBOR byte readers so decoding can be shared between array- and span-backed sources.
+protocol CBORReadable {
+    var maximumStringLength: UInt64 { get set }
+    var maximumElementCount: UInt64 { get set }
+    var hasMoreBytes: Bool { get }
+    mutating func readByte() throws(CBORError) -> UInt8
+    mutating func readBytes(_ count: Int) throws(CBORError) -> ArraySlice<UInt8>
+    mutating func readBigEndianInteger<F: FixedWidthInteger>(_ type: F.Type) throws(CBORError) -> F
+    var currentPosition: Int { get }
+    mutating func skip(_ count: Int) throws(CBORError)
+    mutating func seek(to position: Int) throws(CBORError)
+}
+
+extension CBORReader: CBORReadable {}
+
+#if swift(>=6.2)
+
+#endif

@@ -1,12 +1,4 @@
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#elseif canImport(Musl)
-import Musl
-#elseif os(Windows)
-import ucrt
-#endif
+// No C runtime imports needed - using pure Swift for all operations
 
 // MARK: - CBOR Type
 
@@ -262,6 +254,117 @@ public indirect enum CBOR: Equatable, Sendable {
         return Array(bytes)
     }
     
+#if swift(>=6.2)
+    // MARK: - Span accessors (Swift 6.2+)
+
+    /// Borrow the byte string contents as a `Span` without copying.
+    ///
+    /// This helper avoids the `~Escapable` restrictions on returning spans by invoking
+    /// the provided closure with the borrowed view.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let cbor = CBOR.byteString(ArraySlice([0xde, 0xad, 0xbe, 0xef]))
+    /// let checksum = cbor.withByteStringSpan { span in
+    ///     span.withUnsafeBufferPointer { ptr in
+    ///         ptr.reduce(UInt8(0), &+)
+    ///     }
+    /// }
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter body: Closure that receives the borrowed span.
+    /// - Returns: The closure result when this value is a byte string, otherwise `nil`.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @inlinable
+    public func withByteStringSpan<R>(_ body: (Span<UInt8>) throws -> R) rethrows -> R? {
+        guard case .byteString(let bytes) = self else { return nil }
+        return try body(bytes.span)
+    }
+
+    /// Borrow the UTF-8 contents of a text string as a `Span` without copying.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let cbor = CBOR.textString("hello")
+    /// let uppercased = cbor.withTextStringSpan { span in
+    ///     span.withUnsafeBufferPointer { ptr in
+    ///         String(bytes: ptr, encoding: .utf8)?.uppercased()
+    ///     }
+    /// }
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter body: Closure that receives the borrowed span.
+    /// - Returns: The closure result when this value is a text string, otherwise `nil`.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @inlinable
+    public func withTextStringSpan<R>(_ body: (Span<UInt8>) throws -> R) rethrows -> R? {
+        guard case .textString(let bytes) = self else { return nil }
+        return try body(bytes.span)
+    }
+
+    /// Borrow the encoded payload of an array as a `Span`.
+    ///
+    /// The span includes the array header and all encoded elements.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let array = CBOR.array([.unsignedInt(1), .bool(true)])
+    /// let encodedCount = array.withArraySpan { span in span.count }
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter body: Closure that receives the borrowed span.
+    /// - Returns: The closure result when this value is an array, otherwise `nil`.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @inlinable
+    public func withArraySpan<R>(_ body: (Span<UInt8>) throws -> R) rethrows -> R? {
+        guard case .array(let bytes) = self else { return nil }
+        return try body(bytes.span)
+    }
+
+    /// Borrow the encoded payload of a map as a `Span`.
+    ///
+    /// The span includes the map header and all encoded key-value pairs.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let map = CBOR.map([CBORMapPair(key: .textString("k"), value: .unsignedInt(1))])
+    /// let firstByte = map.withMapSpan { span in span.withUnsafeBufferPointer { $0.first } }
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter body: Closure that receives the borrowed span.
+    /// - Returns: The closure result when this value is a map, otherwise `nil`.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @inlinable
+    public func withMapSpan<R>(_ body: (Span<UInt8>) throws -> R) rethrows -> R? {
+        guard case .map(let bytes) = self else { return nil }
+        return try body(bytes.span)
+    }
+
+    /// Borrow the encoded payload of a tagged value as a `Span`.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let tagged = CBOR.tagged(99, ArraySlice(CBOR.bool(true).encode()))
+    /// let tagAndFirst = tagged.withTaggedValueSpan { span in
+    ///     span.withUnsafeBufferPointer { $0.first }
+    /// }
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter body: Closure that receives the borrowed span for the tagged value.
+    /// - Returns: The tag and closure result when this value is tagged, otherwise `nil`.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    @inlinable
+    public func withTaggedValueSpan<R>(_ body: (Span<UInt8>) throws -> R) rethrows -> (UInt64, R)? {
+        guard case .tagged(let tag, let bytes) = self else { return nil }
+        return (tag, try body(bytes.span))
+    }
+#endif
+
     /// Returns the array value of this CBOR value
     ///
     /// - Returns: An array of CBOR values, or nil if this is not an array
@@ -706,13 +809,110 @@ private func encodeUnsigned(major: UInt8, value: UInt64, into output: inout [UIn
 
 // MARK: - Decoding
 
+#if swift(>=6.2)
+@available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+private struct CBORUnsafeBufferReader: CBORReadable {
+    private let buffer: UnsafeBufferPointer<UInt8>
+    private var position: Int
+    internal var maximumStringLength: UInt64 = 65_536
+    internal var maximumElementCount: UInt64 = 16_384
+
+    init(buffer: UnsafeBufferPointer<UInt8>) {
+        self.buffer = buffer
+        self.position = 0
+    }
+
+    var hasMoreBytes: Bool {
+        position < buffer.count
+    }
+
+    mutating func readByte() throws(CBORError) -> UInt8 {
+        guard position < buffer.count else {
+            throw CBORError.prematureEnd
+        }
+        let value = buffer[position]
+        position += 1
+        return value
+    }
+
+    mutating func readBytes(_ count: Int) throws(CBORError) -> ArraySlice<UInt8> {
+        guard position + count <= buffer.count else {
+            throw CBORError.prematureEnd
+        }
+        let copied = Array(buffer[position..<(position + count)])
+        position += count
+        return ArraySlice(copied)
+    }
+
+    mutating func readBigEndianInteger<F: FixedWidthInteger>(_ type: F.Type) throws(CBORError) -> F {
+        let bytes = try readBytes(MemoryLayout<F>.size)
+        var value: F = 0
+        return bytes.withUnsafeBytes { source in
+            withUnsafeMutableBytes(of: &value) { destination in
+                destination.copyMemory(from: source)
+            }
+            return value.bigEndian
+        }
+    }
+
+    var currentPosition: Int {
+        position
+    }
+
+    mutating func skip(_ count: Int) throws(CBORError) {
+        guard position + count <= buffer.count else {
+            throw CBORError.prematureEnd
+        }
+        position += count
+    }
+
+    mutating func seek(to position: Int) throws(CBORError) {
+        guard position >= 0 && position <= buffer.count else {
+            throw CBORError.invalidPosition
+        }
+        self.position = position
+    }
+}
+
+extension CBOR {
+    /// Decodes a CBOR value from a `Span` of bytes.
+    ///
+    /// This is a convenience overload for Swift 6.2+ callers that already have
+    /// contiguous storage borrowed as a `Span`.
+    ///
+    /// ```swift
+    /// #if swift(>=6.2)
+    /// let encoded = CBOR.textString("hi").encode()
+    /// let decoded = try CBOR.decode(encoded.span)
+    /// #endif
+    /// ```
+    ///
+    /// - Parameter bytes: Borrowed contiguous bytes to decode.
+    /// - Returns: The decoded CBOR value.
+    /// - Throws: A `CBORError` if decoding fails.
+    @available(macOS 26.0, iOS 18.0, tvOS 18.0, watchOS 11.0, *)
+    public static func decode(_ bytes: Span<UInt8>) throws -> CBOR {
+        return try bytes.withUnsafeBufferPointer { buffer in
+            var reader = CBORUnsafeBufferReader(buffer: buffer)
+            let value = try _decode(reader: &reader)
+
+            if reader.hasMoreBytes {
+                throw CBORError.extraDataFound
+            }
+
+            return value
+        }
+    }
+}
+#endif
+
 /// Decodes a CBOR value from the reader.
 ///
 /// - Parameters:
 ///   - reader: The reader to decode from
 /// - Returns: The decoded CBOR value
 /// - Throws: A `CBORError` if the decoding fails
-private func _decode(reader: inout CBORReader) throws(CBORError) -> CBOR {
+private func _decode<R: CBORReadable>(reader: inout R) throws(CBORError) -> CBOR {
     let initial = try reader.readByte()
     
     // Check for break marker (0xff)
@@ -964,21 +1164,23 @@ private func convertHalfPrecisionToDouble(_ halfPrecision: UInt16) -> Double {
     
     var value: Double
     if exponent == 0 {
-        // Subnormal number
-        value = Double(fraction) * pow(2, -24)
+        // Subnormal number (2^-24 = 0x1p-24 in hex float literal)
+        value = Double(fraction) * 0x1p-24
     } else if exponent == 31 {
         // Infinity or NaN
         value = fraction == 0 ? Double.infinity : Double.nan
     } else {
-        // Normal number
-        value = Double(fraction | 0x0400) * pow(2, Double(exponent - 25))
+        // Normal number - use pure Swift power of 2 calculation
+        let exp = exponent - 25
+        let multiplier: Double = exp >= 0 ? Double(1 << exp) : 1.0 / Double(1 << (-exp))
+        value = Double(fraction | 0x0400) * multiplier
     }
     
     return sign ? -value : value
 }
 
 /// Reads an unsigned integer value based on the additional information.
-private func readUIntValue(additional: UInt8, reader: inout CBORReader) throws(CBORError) -> UInt64 {
+private func readUIntValue<R: CBORReadable>(additional: UInt8, reader: inout R) throws(CBORError) -> UInt64 {
     switch additional {
     case 0...23:
         return UInt64(additional)
