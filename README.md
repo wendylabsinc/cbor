@@ -6,7 +6,7 @@
 [![macOS](https://img.shields.io/github/actions/workflow/status/wendylabsinc/cbor/swift.yml?branch=main&label=macOS)](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml)
 [![Linux](https://img.shields.io/github/actions/workflow/status/wendylabsinc/cbor/swift.yml?branch=main&label=Linux)](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml)
 [![Windows](https://img.shields.io/github/actions/workflow/status/wendylabsinc/cbor/swift.yml?branch=main&label=Windows)](https://github.com/wendylabsinc/cbor/actions/workflows/swift.yml)
-[![Documentation](https://img.shields.io/badge/Documentation-DocC-blue)](https://wendylabsinc.github.io/cbor/documentation/cbor/)
+[![Documentation](https://img.shields.io/badge/Documentation-DocC-blue)](https://swiftpackageindex.com/wendylabsinc/cbor/documentation)
 
 CBOR is a lightweight implementation of the [CBOR](https://tools.ietf.org/html/rfc7049) (Concise Binary Object Representation) format in Swift. It allows you to encode and decode data to and from the CBOR format, work directly with the CBOR data model, and integrate with Swift's `Codable` protocol.
 
@@ -65,8 +65,8 @@ CBOR is a lightweight implementation of the [CBOR](https://tools.ietf.org/html/r
 
 Comprehensive documentation is available via DocC:
 
-- [Online Documentation](https://wendylabsinc.github.io/cbor/documentation/cbor/)
-- Generate locally with: `swift package --allow-writing-to-directory ./docs generate-documentation --target CBOR`
+- [Online Documentation](https://swiftpackageindex.com/wendylabsinc/cbor/documentation) (hosted by Swift Package Index)
+- Generate locally with: `swift package generate-documentation --target CBOR`
 
 ## Installation
 
