@@ -1,12 +1,4 @@
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
-#elseif canImport(Musl)
-import Musl
-#elseif os(Windows)
-import WinSDK
-#endif
+// No C runtime imports needed - using pure Swift for all operations
 
 // MARK: - CBOR Type
 
@@ -1172,14 +1164,16 @@ private func convertHalfPrecisionToDouble(_ halfPrecision: UInt16) -> Double {
     
     var value: Double
     if exponent == 0 {
-        // Subnormal number
-        value = Double(fraction) * pow(2, -24)
+        // Subnormal number (2^-24 = 0x1p-24 in hex float literal)
+        value = Double(fraction) * 0x1p-24
     } else if exponent == 31 {
         // Infinity or NaN
         value = fraction == 0 ? Double.infinity : Double.nan
     } else {
-        // Normal number
-        value = Double(fraction | 0x0400) * pow(2, Double(exponent - 25))
+        // Normal number - use pure Swift power of 2 calculation
+        let exp = exponent - 25
+        let multiplier: Double = exp >= 0 ? Double(1 << exp) : 1.0 / Double(1 << (-exp))
+        value = Double(fraction | 0x0400) * multiplier
     }
     
     return sign ? -value : value
